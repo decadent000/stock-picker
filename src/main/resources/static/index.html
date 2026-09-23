@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>A股竞价选股台</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1020; --panel:#121a2e; --line:#25304b; --text:#edf2ff; --muted:#91a0bd; --good:#31d0aa; --warn:#ffb84d; --bad:#ff6b7a; --accent:#6aa7ff; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: Inter, "Microsoft YaHei", sans-serif; background:linear-gradient(180deg,#09101f,#0d1324 40%,#0a0f1d); color:var(--text); }
+    .wrap { max-width:1500px; margin:0 auto; padding:24px; }
+    h1 { margin:0 0 6px; font-size:28px; }
+    .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
+    .toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+    input,button { border:1px solid var(--line); background:#111a30; color:var(--text); border-radius:8px; padding:9px 12px; }
+    button { cursor:pointer; }
+    button:hover { border-color:var(--accent); }
+    .grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
+    .card,.panel { background:rgba(18,26,46,.92); border:1px solid var(--line); border-radius:12px; }
+    .card { padding:15px; }
+    .card .label { color:var(--muted); font-size:12px; }
+    .card .value { font-size:25px; font-weight:700; margin-top:6px; }
+    .panel { margin-bottom:16px; overflow:hidden; }
+    .panel h2 { font-size:16px; margin:0; padding:14px 16px; border-bottom:1px solid var(--line); }
+    .notice { padding:10px 14px; margin-bottom:14px; border-radius:9px; font-size:13px; border:1px solid #614c20; background:#2a2314; color:#ffd98a; }
+    .ok { border-color:#185d50; background:#102a27; color:#8df0d7; }
+    .table-wrap { overflow:auto; }
+    table { width:100%; border-collapse:collapse; min-width:1050px; }
+    th,td { padding:10px 12px; border-bottom:1px solid #202a42; text-align:right; font-size:13px; white-space:nowrap; }
+    th { color:#9fb0cf; font-weight:600; background:#10182b; position:sticky; top:0; }
+    th:first-child,td:first-child,th:nth-child(2),td:nth-child(2),.left { text-align:left; }
+    tr:hover td { background:#151f37; }
+    .score { font-weight:800; }
+    .high { color:var(--good); } .mid { color:var(--warn); } .low { color:var(--bad); }
+    .muted { color:var(--muted); }
+    .reason { max-width:520px; white-space:normal; line-height:1.5; text-align:left; }
+    .footer { color:var(--muted); font-size:12px; line-height:1.7; padding:8px 2px 30px; }
+    @media(max-width:900px){ .grid{grid-template-columns:repeat(2,1fr)} .wrap{padding:14px} }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>A股竞价选股台</h1>
+  <div class="sub">竞价硬条件：换手率 &gt; 2% · 09:25 涨幅 &gt; 5% · 五档委卖量 &gt; 五档委买量</div>
+
+  <div class="toolbar">
+    <input id="date" type="date">
+    <button onclick="loadData()">刷新数据</button>
+    <button onclick="captureNow()">手动抓取当前快照</button>
+    <span id="loading" class="muted"></span>
+  </div>
+
+  <div id="snapshotNotice" class="notice"></div>
+
+  <div class="grid">
+    <div class="card"><div class="label">筛选候选</div><div class="value" id="candidateCount">-</div></div>
+    <div class="card"><div class="label">龙虎榜条目</div><div class="value" id="dragonCount">-</div></div>
+    <div class="card"><div class="label">涨停池 / 连板数据</div><div class="value" id="limitCount">-</div></div>
+    <div class="card"><div class="label">最高连板</div><div class="value" id="maxBoard">-</div></div>
+  </div>
+
+  <section class="panel">
+    <h2>竞价候选与“妖股概率”</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>代码</th><th>名称</th><th>竞价换手</th><th>09:25涨幅</th><th>委买量</th><th>委卖量</th><th>委卖/委买</th><th>连板</th><th>龙虎榜净额</th><th>妖股概率</th><th class="left">评分依据</th>
+        </tr></thead>
+        <tbody id="candidateBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>龙虎榜资金流向 <span id="dragonDate" class="muted"></span></h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>代码</th><th>名称</th><th>涨跌幅</th><th>买入额</th><th>卖出额</th><th>净额</th><th>成交占比</th><th class="left">上榜原因</th></tr></thead>
+        <tbody id="dragonBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>涨停 / 连板池</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>代码</th><th>名称</th><th>涨跌幅</th><th>换手率</th><th>连板</th><th>炸板</th><th>封单资金</th><th>流通市值</th><th>首封</th><th>末封</th><th class="left">行业</th></tr></thead>
+        <tbody id="limitBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="footer">
+    “妖股概率”是规则型启发式评分（0–95），不是经过历史样本校准的真实概率，也不代表未来收益。
+    东方财富网页接口属于非官方稳定 API，字段或访问策略变化时可能失效；生产使用建议替换为有授权的 Level-2 / 券商行情源。
+  </div>
+</div>
+<script>
+const money = v => (v == null ? '-' : (v/100000000).toFixed(2) + '亿');
+const pct = v => (v == null ? '-' : Number(v).toFixed(2) + '%');
+const num = v => v == null ? '-' : Number(v).toLocaleString('zh-CN');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+async function loadData() {
+  const loading = document.getElementById('loading');
+  loading.textContent = '加载中...';
+  try {
+    const d = document.getElementById('date').value;
+    const url = d ? '/api/dashboard?date=' + encodeURIComponent(d) : '/api/dashboard';
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    render(await r.json());
+  } catch (e) {
+    document.getElementById('snapshotNotice').className='notice';
+    document.getElementById('snapshotNotice').textContent='加载失败：' + e.message;
+  } finally {
+    loading.textContent = '';
+  }
+}
+
+async function captureNow() {
+  const r = await fetch('/api/auction/capture', {method:'POST'});
+  const data = await r.json();
+  alert('已抓取 ' + data.count + ' 条预筛选快照。' + (data.exactAuctionSnapshot ? '当前位于09:25窗口。' : '注意：当前不在09:25窗口，仅可作调试参考。'));
+  loadData();
+}
+
+function render(data) {
+  const candidates = data.candidates || [], dragons = data.dragonTiger || [], limits = data.limitUps || [];
+  document.getElementById('candidateCount').textContent = candidates.length;
+  document.getElementById('dragonCount').textContent = dragons.length;
+  document.getElementById('limitCount').textContent = limits.length;
+  document.getElementById('maxBoard').textContent = limits.reduce((m,x)=>Math.max(m,x.boardCount||0),0) + '板';
+  document.getElementById('dragonDate').textContent = data.dragonTigerTradeDate ? '数据日 ' + data.dragonTigerTradeDate : '暂无已公布数据';
+
+  const notice = document.getElementById('snapshotNotice');
+  const ts = data.auctionSnapshotTime ? data.auctionSnapshotTime.replace('T',' ') : '无';
+  if (data.exactAuctionSnapshot) {
+    notice.className='notice ok';
+    notice.textContent='09:25 竞价快照有效：' + ts + ' ｜ 数据源：' + data.provider;
+  } else {
+    notice.className='notice';
+    notice.textContent='当前没有严格的09:25快照（时间：' + ts + '）。盘中实时换手率不能等同于竞价换手率；请让程序在09:25前运行，或仅把当前结果用于调试。';
+  }
+
+  document.getElementById('candidateBody').innerHTML = candidates.map(x => {
+    const cls = x.probabilityLevel === '高' ? 'high' : (x.probabilityLevel === '中' ? 'mid' : 'low');
+    return '<tr><td>'+esc(x.code)+'</td><td>'+esc(x.name)+'</td><td>'+pct(x.auctionTurnoverRate)+'</td><td>'+pct(x.auctionPctChange)+'</td>'+
+      '<td>'+num(x.auctionBidVolume)+'</td><td>'+num(x.auctionAskVolume)+'</td><td>'+Number(x.askBidRatio||0).toFixed(2)+'</td>'+
+      '<td>'+num(x.boardCount)+'</td><td>'+money(x.dragonTigerNetAmount)+'</td><td class="score '+cls+'">'+x.yaoProbability+'% ('+esc(x.probabilityLevel)+')</td>'+
+      '<td class="reason">'+esc((x.reasons||[]).join('；'))+'</td></tr>';
+  }).join('') || '<tr><td colspan="11" class="left muted">暂无满足三项硬条件的股票</td></tr>';
+
+  document.getElementById('dragonBody').innerHTML = dragons.map(x =>
+    '<tr><td>'+esc(x.code)+'</td><td>'+esc(x.name)+'</td><td>'+pct(x.pctChange)+'</td><td>'+money(x.buyAmount)+'</td><td>'+money(x.sellAmount)+'</td>'+
+    '<td class="'+(x.netAmount>=0?'high':'low')+'">'+money(x.netAmount)+'</td><td>'+pct(x.dealAmountRatio)+'</td><td class="reason">'+esc(x.reason)+'</td></tr>'
+  ).join('') || '<tr><td colspan="8" class="left muted">暂无龙虎榜数据</td></tr>';
+
+  document.getElementById('limitBody').innerHTML = limits.map(x =>
+    '<tr><td>'+esc(x.code)+'</td><td>'+esc(x.name)+'</td><td>'+pct(x.pctChange)+'</td><td>'+pct(x.turnoverRate)+'</td><td>'+num(x.boardCount)+'</td>'+
+    '<td>'+num(x.openBoardCount)+'</td><td>'+money(x.sealFund)+'</td><td>'+money(x.floatMarketCap)+'</td><td>'+esc(x.firstLimitTime)+'</td><td>'+esc(x.lastLimitTime)+'</td><td class="left">'+esc(x.industry)+'</td></tr>'
+  ).join('') || '<tr><td colspan="11" class="left muted">暂无涨停池数据</td></tr>';
+}
+
+loadData();
+</script>
+</body>
+</html>
