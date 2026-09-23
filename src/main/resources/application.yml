@@ -1,0 +1,17 @@
+server:
+  port: 8080
+
+spring:
+  jackson:
+    time-zone: Asia/Shanghai
+    serialization:
+      write-dates-as-timestamps: false
+
+stock-picker:
+  # eastmoney = 实盘网页数据适配器；mock = 无网络/演示模式
+  provider: eastmoney
+  auction-turnover-rate: 2.0
+  auction-pct-change: 5.0
+  data-dir: ./data
+  # 中国时区 09:25:05 抓取竞价快照；应用必须在此之前运行。
+  auction-capture-cron: "5 25 9 * * MON-FRI"
